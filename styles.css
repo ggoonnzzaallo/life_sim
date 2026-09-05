@@ -93,7 +93,11 @@ h1 { margin: 0; font-size: clamp(23px, 3vw, 36px); letter-spacing: -.05em; }
 .rules-list { padding: 4px 20px 20px; overflow: auto; max-height: calc(100vh - 100px); }
 .rules-list section { padding: 16px 0; border-bottom: 1px solid var(--line); }
 .rules-list section:last-child { border-bottom: 0; }
-.rules-list p { margin: 7px 0 0; color: var(--muted); font-family: system-ui, sans-serif; font-size: 13px; line-height: 1.6; }
+.rules-list ul { display: grid; gap: 8px; margin: 9px 0 0; padding-left: 18px; }
+.rules-list li, .rules-list p { color: var(--muted); font-family: system-ui, sans-serif; font-size: 13px; line-height: 1.5; }
+.rules-list li::marker { color: #526066; }
+.rules-list .rules-key { margin: 14px 0 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 4px; background: rgba(255, 255, 255, .025); }
+.setting-tag { display: inline-block; margin-left: 4px; padding: 1px 6px; border: 1px solid #55636a; border-radius: 999px; color: #b7c3c8; font-family: var(--font-mono); font-size: 8px; font-weight: 700; letter-spacing: .06em; line-height: 1.6; text-transform: uppercase; vertical-align: 1px; }
 .plant-text { color: var(--green); }
 .herbivore-text { color: var(--yellow); }
 .predator-text { color: var(--blue); }

@@ -159,12 +159,42 @@
         <button class="icon-button" data-close="rulesDialog" type="button" aria-label="Close rules">×</button>
       </div>
       <div class="rules-list">
-        <section><h3>Movement</h3><p><strong class="plant-text">Green plants</strong> stay still and cannot overlap one another. <strong class="herbivore-text">Yellow herbivores cannot overlap; they flee nearby predators first, then seek eligible mates, then plants. Nearby herd members increase their predator-awareness range.</strong> <strong class="predator-text">Blue predators scan over long distances for yellows and smaller blues</strong>, but stop hunting and slow down while digesting a meal. Plants remain solid barriers to predators.</p></section>
-        <section><h3>Feeding</h3><p><strong class="herbivore-text">Herbivores can eat plants of equal or lower level.</strong> Higher-level plants are protected, and maximum-level plants can only be eaten by a maximum-level herbivore. After eating, herbivores slow down and must finish a digestion cooldown before eating again. <strong class="predator-text">Level-1 and level-2 predators can eat herbivores of equal displayed size or one pixel larger; level-3 apex predators can eat any herbivore.</strong> Predators must digest each meal before hunting or eating again. Cannibalism pauses when only three predators remain, and level-1 offspring are always protected.</p></section>
-        <section><h3>Reproduction</h3><p><strong class="plant-text">Plants spawn naturally in open ground, and high-level plants seed much faster nearby.</strong> Maximum-level plants can produce several seedlings in one growth cycle. <strong class="herbivore-text">Herbivores must reach level 2 before mating.</strong> Eligible pairs produce two to four offspring based on their combined energy; offspring are placed in nearby open spots. <strong class="predator-text">Predators produce one offspring after eating two herbivores.</strong> Newborn predators appear beside their parent and remain safe from cannibalism at level 1.</p></section>
-        <section><h3>Migration</h3><p>At uncommon, randomized times, cohesive packs of <strong class="herbivore-text">herbivores</strong> enter together through one map edge, while <strong class="predator-text">predators</strong> arrive separately. Predator migration becomes more frequent when fewer than three remain, helping restore a declining or extinct population.</p></section>
-        <section><h3>Leveling</h3><p><strong class="plant-text">Plants level up about every 60 seconds with individual timing variation and cap at level 8.</strong> Only one maximum-level plant may exist within its exclusion radius; nearby plants remain one level below the maximum. A maximum-level plant is protected from everything except a maximum-level herbivore. <strong class="herbivore-text">Herbivores level up by eating and cap at level 5.</strong> <strong class="predator-text">Predators reach level 2 after three prey meals and level 3 after eight total prey meals.</strong> Yellow and blue prey both count toward progression, while reproduction counts only yellow meals. Higher levels make moving species larger, faster, and better at seeing food.</p></section>
-        <section><h3>Survival</h3><p><strong class="herbivore-text">Herbivores</strong> and <strong class="predator-text">predators</strong> steadily lose energy and eventually die without food. They do not die from old age unless that option is enabled in Settings. All populations share the world population limit.</p></section>
+        <p class="rules-key"><span class="setting-tag">Adjustable</span> marks rules you can tune in Settings.</p>
+        <section><h3>Movement &amp; instincts</h3><ul>
+          <li><strong class="plant-text">Green plants</strong> stay still and cannot overlap.</li>
+          <li><strong class="herbivore-text">Yellow herbivores</strong> cannot overlap. They flee predators, seek mates, then seek edible plants.</li>
+          <li><strong class="herbivore-text">Herds</strong> notice predators from farther away. <span class="setting-tag">Adjustable</span></li>
+          <li><strong class="predator-text">Blue predators</strong> chase yellows and eligible smaller blues, but wander slowly when no prey is visible. <span class="setting-tag">Adjustable</span></li>
+          <li>Plants are solid barriers to predators. <span class="setting-tag">Adjustable</span></li>
+        </ul></section>
+        <section><h3>Feeding</h3><ul>
+          <li><strong class="herbivore-text">Herbivores</strong> eat plants at their level or below. A maximum-level herbivore can eat a maximum-level plant.</li>
+          <li>Herbivores slow down and must digest between meals. <span class="setting-tag">Adjustable</span></li>
+          <li><strong class="predator-text">Predators</strong> can eat herbivores of equal displayed size or slightly larger; apex predators can eat any herbivore. <span class="setting-tag">Adjustable</span></li>
+          <li>Predators slow down and stop hunting while digesting. <span class="setting-tag">Adjustable</span></li>
+          <li>Predators can eat lower-level predators, but level-1 offspring are protected. <span class="setting-tag">Adjustable</span></li>
+        </ul></section>
+        <section><h3>Reproduction</h3><ul>
+          <li><strong class="plant-text">Plants</strong> spawn in open ground; mature plants seed more quickly nearby. <span class="setting-tag">Adjustable</span></li>
+          <li><strong class="herbivore-text">Herbivores</strong> must reach a minimum level before mating. Litter size grows with the parents’ energy. <span class="setting-tag">Adjustable</span></li>
+          <li><strong class="predator-text">Predators</strong> produce one offspring after enough yellow meals. <span class="setting-tag">Adjustable</span></li>
+        </ul></section>
+        <section><h3>Migration</h3><ul>
+          <li><strong class="herbivore-text">Herbivores</strong> occasionally enter together as a pack through one map edge. <span class="setting-tag">Adjustable</span></li>
+          <li><strong class="predator-text">Predators</strong> arrive separately, and migrate more often when fewer than three remain. <span class="setting-tag">Adjustable</span></li>
+        </ul></section>
+        <section><h3>Leveling</h3><ul>
+          <li><strong class="plant-text">Plants</strong> level up by surviving, with randomized timing. <span class="setting-tag">Adjustable</span></li>
+          <li>Only one maximum-level plant may exist within a local exclusion radius. <span class="setting-tag">Adjustable</span></li>
+          <li><strong class="herbivore-text">Herbivores</strong> level up by eating plants. <span class="setting-tag">Adjustable</span></li>
+          <li><strong class="predator-text">Predators</strong> level up at cumulative prey-meal milestones. <span class="setting-tag">Adjustable</span></li>
+          <li>Higher levels increase size and movement speed. <span class="setting-tag">Adjustable</span></li>
+        </ul></section>
+        <section><h3>Survival</h3><ul>
+          <li><strong class="herbivore-text">Herbivores</strong> and <strong class="predator-text">predators</strong> lose energy and die without food. Predator energy use and meal energy are adjustable. <span class="setting-tag">Adjustable</span></li>
+          <li>Old-age deaths are off by default and can be enabled. <span class="setting-tag">Adjustable</span></li>
+          <li>All species share the world population limit. Starting populations, map size, and the limit are adjustable. <span class="setting-tag">Adjustable</span></li>
+        </ul></section>
       </div>
     </dialog>
 
