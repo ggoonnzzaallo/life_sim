@@ -88,6 +88,7 @@
           <label>Starting herbivores <input data-setting="startingHerbivores" type="number" min="0" max="300" /></label>
           <label>Starting predators <input data-setting="startingPredators" type="number" min="0" max="100" /></label>
           <label>Population limit <input data-setting="maxPopulation" type="number" min="100" max="10000" step="50" /></label>
+          <label>Maximum share per species <input data-setting="maxSpeciesShare" type="number" min="34" max="99" step="1" data-percent /></label>
           <label>Map scale <input data-setting="mapScale" type="number" min="1" max="3" step="0.25" /></label>
           <label class="toggle-row">Enable old age <input data-setting="oldAgeEnabled" type="checkbox" /></label>
           <label>Animal lifespan (sec) <input data-setting="animalLifespan" type="number" min="30" max="3600" step="10" /></label>
@@ -193,7 +194,7 @@
         <section><h3>Survival</h3><ul>
           <li><strong class="herbivore-text">Herbivores</strong> and <strong class="predator-text">predators</strong> lose energy and die without food. Predator energy use and meal energy are adjustable. <span class="setting-tag">Adjustable</span></li>
           <li>Old-age deaths are off by default and can be enabled. <span class="setting-tag">Adjustable</span></li>
-          <li>All species share the world population limit. Starting populations, map size, and the limit are adjustable. <span class="setting-tag">Adjustable</span></li>
+          <li>All species share the world population limit, but no single species may fill the entire world. Starting populations, map size, total limit, and maximum species share are adjustable. <span class="setting-tag">Adjustable</span></li>
         </ul></section>
       </div>
     </dialog>

@@ -22,6 +22,7 @@ const settings = {
   startingHerbivores: 50,
   startingPredators: 5,
   maxPopulation: 5000,
+  maxSpeciesShare: .9,
   mapScale: 1.5,
   oldAgeEnabled: false,
   animalLifespan: 150,
@@ -129,6 +130,16 @@ const canPredatorEatHerbivore = (predator, herbivore) =>
 const canHerbivoreEatPlant = (herbivore, plant) =>
   (plant.level < settings.plantPerpetualLevel && plant.level <= herbivore.level) ||
   (plant.level >= settings.plantPerpetualLevel && herbivore.level >= settings.herbivoreMaxLevel);
+
+function availableSpeciesSlots(type) {
+  const totalSlots = Math.max(0, settings.maxPopulation - organisms.length);
+  const speciesLimit = Math.max(1, Math.floor(settings.maxPopulation * settings.maxSpeciesShare));
+  const speciesPopulation = organisms.reduce((count, organism) =>
+    count + (!organism.dead && organism.type === type ? 1 : 0), 0);
+  return Math.max(0, Math.min(totalSlots, speciesLimit - speciesPopulation));
+}
+
+const canAddSpecies = (type) => availableSpeciesSlots(type) > 0;
 
 class Organism {
   constructor(type, x = random(0, canvas.width), y = random(0, canvas.height)) {
@@ -331,7 +342,7 @@ class Organism {
           this.level = Math.min(settings.herbivoreMaxLevel, this.level + settings.herbivoreLevelGain);
         }
         if (this.type === "predator" && this.herbivoreMeals >= settings.predatorMealsPerOffspring &&
-            organisms.length < settings.maxPopulation) {
+            canAddSpecies("predator")) {
           organisms.push(new Organism("predator", this.x + random(-8, 8), this.y + random(-8, 8)));
           this.herbivoreMeals = 0;
           this.energy *= .7;
@@ -341,7 +352,7 @@ class Organism {
       if (this.type === "herbivore" && other.type === "herbivore" &&
           this.level >= settings.herbivoreMatingLevel && other.level >= settings.herbivoreMatingLevel &&
           this.reproductionCooldown <= 0 && other.reproductionCooldown <= 0 &&
-          this.energy > 45 && other.energy > 45 && organisms.length < settings.maxPopulation) {
+          this.energy > 45 && other.energy > 45 && canAddSpecies("herbivore")) {
         const centerX = (this.x + other.x) / 2;
         const centerY = (this.y + other.y) / 2;
         const averageParentEnergy = (this.energy + other.energy) / 2;
@@ -349,7 +360,7 @@ class Organism {
         const minimumLitter = Math.min(settings.herbivoreMinOffspring, settings.herbivoreMaxOffspring);
         const maximumLitter = Math.max(settings.herbivoreMinOffspring, settings.herbivoreMaxOffspring);
         const energyBasedLitter = minimumLitter + Math.round(energyFitness * (maximumLitter - minimumLitter));
-        const availableSlots = settings.maxPopulation - organisms.length;
+        const availableSlots = availableSpeciesSlots("herbivore");
         const offspringCount = Math.min(energyBasedLitter, availableSlots);
         for (let i = 0; i < offspringCount; i++) {
           const offspring = createOpenOrganism("herbivore", centerX, centerY, 22);
@@ -476,7 +487,7 @@ function scheduleMigration(type) {
 
 function migrate(type) {
   const requested = type === "herbivore" ? settings.herbivoreMigrationCount : settings.predatorMigrationCount;
-  const amount = Math.min(requested, settings.maxPopulation - organisms.length);
+  const amount = Math.min(requested, availableSpeciesSlots(type));
   const packEntry = type === "herbivore" ? randomEdgePosition() : null;
   for (let i = 0; i < amount; i++) {
     const migrant = type === "herbivore"
@@ -488,6 +499,7 @@ function migrate(type) {
 }
 
 function spawnPlant() {
+  if (!canAddSpecies("plant")) return;
   const plants = organisms.filter((organism) => !organism.dead && organism.type === "plant");
   if (plants.length && Math.random() < settings.plantClusterChance) {
     const weightTotal = plants.reduce((sum, plant) => sum + plant.level ** 3, 0);
@@ -500,7 +512,7 @@ function spawnPlant() {
     const spread = Math.max(10, 46 - parent.level * 4);
     const maturity = (parent.level - 1) / Math.max(1, settings.plantPerpetualLevel - 1);
     const seedlingCount = 1 + Math.round(maturity * (settings.plantMaxSeedlings - 1));
-    for (let i = 0; i < seedlingCount && organisms.length < settings.maxPopulation; i++) {
+    for (let i = 0; i < seedlingCount && canAddSpecies("plant"); i++) {
       const plant = createOpenOrganism("plant", parent.x, parent.y, spread) || createOpenOrganism("plant");
       if (plant) organisms.push(plant);
     }
@@ -598,7 +610,7 @@ function drawChart() {
 }
 
 function addPlantPatch(x, y, amount = 12) {
-  for (let i = 0; i < amount && organisms.length < settings.maxPopulation; i++) {
+  for (let i = 0; i < amount && canAddSpecies("plant"); i++) {
     const plant = createOpenOrganism("plant", x, y, 28);
     if (plant) organisms.push(plant);
   }
@@ -616,7 +628,7 @@ function resetWorld(reason = "new_world") {
     predator: settings.startingPredators,
   };
   for (const [type, amount] of Object.entries(startingPopulation)) {
-    for (let i = 0; i < amount; i++) {
+    for (let i = 0; i < amount && canAddSpecies(type); i++) {
       const organism = type === "predator" ? new Organism(type) : createOpenOrganism(type);
       if (organism) organisms.push(organism);
     }
