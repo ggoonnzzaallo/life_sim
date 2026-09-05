@@ -1,7 +1,6 @@
-# Pixel Life
+I was in Yosemite with my girlfriend the other weekend making the argument that an ecosystem could exist without carnivores, just by regulating the herbivore population thru the food supply. 
 
-A dependency-free ecosystem simulation rendered on an HTML canvas.
+That led me to set up a simple sim where you have to balance three species: blues (predators), yellows (herbivores), and greens (plants) each with their own set of rules and behaviors. 
 
-[Play Pixel Life online](https://htmlpreview.github.io/?https://github.com/ggoonnzzaallo/life_sim/blob/main/index.html)
+[Run the sim online](https://htmlpreview.github.io/?https://github.com/ggoonnzzaallo/life_sim/blob/main/index.html)
 
-Open `index.html` in a browser to play. Green plants grow on their own, yellow herbivores eat plants and reproduce on contact, and blue predators eat herbivores and reproduce after successful hunts. Eating raises an organism's level, size, and speed.
