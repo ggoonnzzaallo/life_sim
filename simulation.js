@@ -22,34 +22,58 @@ const settings = {
   startingHerbivores: 50,
   startingPredators: 5,
   maxPopulation: 2000,
+  mapScale: 1.5,
+  oldAgeEnabled: false,
+  animalLifespan: 150,
   speedGainPerLevel: .12,
   sizeGainPerLevel: 1.2,
-  plantSpawnInterval: .5,
-  plantLevelInterval: 12,
+  plantSpawnInterval: .2,
+  plantLevelInterval: 20,
   plantPerpetualLevel: 8,
   plantClusterChance: .82,
+  plantMaxSeedlings: 4,
   plantSizeGainPerLevel: .75,
   herbivoreSpeed: 13,
+  herbivoreMaxLevel: 5,
   herbivoreVision: 90,
-  predatorSpeed: 15,
+  herdAwarenessRadius: 80,
+  herdVigilancePerMember: .1,
+  herdVigilanceMaxBonus: 1,
+  predatorSpeed: 17,
+  predatorMaxLevel: 3,
   predatorSpeedGainPerLevel: .25,
   predatorVision: 320,
   predatorIdleSpeedFactor: .25,
   predatorSlowDuration: 4,
   predatorSlowFactor: .45,
-  predatorMealsPerOffspring: 3,
+  predatorEatCooldown: 3.5,
+  predatorChaseEnergyDrain: 1.25,
+  predatorIdleEnergyDrain: .35,
+  predatorMealEnergy: 60,
+  predatorMealsPerOffspring: 2,
   herbivoreOffspringCount: 3,
   herbivoreMatingLevel: 2,
   herbivoreMateCooldown: 9,
   herbivoreEatCooldown: 3,
   herbivoreSlowDuration: 2.5,
   herbivoreSlowFactor: .5,
-  predatorReproductionCooldown: 13,
+  herbivoreMigrationInterval: 55,
+  herbivoreMigrationCount: 3,
+  predatorMigrationInterval: 110,
+  predatorMigrationCount: 1,
   herbivoreLevelGain: .28,
   predatorLevelGain: .55,
   largerPreyAllowance: 1,
+  cannibalLevelGap: 1,
   plantsBlockPredators: true,
 };
+
+try {
+  const savedSettings = JSON.parse(localStorage.getItem("pixelLifeSettings") || "null");
+  if (savedSettings && typeof savedSettings === "object") Object.assign(settings, savedSettings);
+} catch {
+  // Ignore malformed or unavailable browser storage and use built-in defaults.
+}
 
 let organisms = [];
 let paused = false;
@@ -58,12 +82,20 @@ let worldAge = 0;
 let plantSpawnTimer = 0;
 let chartSampleTimer = 0;
 let populationHistory = [];
+let migrationTimers = { herbivore: 0, predator: 0 };
 let lastFrame = performance.now();
 
 const random = (min, max) => min + Math.random() * (max - min);
 const distanceSquared = (a, b) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
+const trackAnalytics = (event, properties = {}) => {
+  if (window.posthog?.capture) window.posthog.capture(event, properties);
+};
 const canPredatorEatHerbivore = (predator, herbivore) =>
+  predator.level >= settings.predatorMaxLevel ||
   Math.round(predator.size) + settings.largerPreyAllowance >= Math.round(herbivore.size);
+const canHerbivoreEatPlant = (herbivore, plant) =>
+  (plant.level < settings.plantPerpetualLevel && plant.level <= herbivore.level) ||
+  (plant.level >= settings.plantPerpetualLevel && herbivore.level >= settings.herbivoreMaxLevel);
 
 class Organism {
   constructor(type, x = random(0, canvas.width), y = random(0, canvas.height)) {
@@ -111,15 +143,21 @@ class Organism {
 
     let target = null;
     let nearest = Infinity;
-    const baseVision = this.type === "herbivore" ? settings.herbivoreVision : settings.predatorVision;
-    const vision = (baseVision + this.level * 10) ** 2;
+    const baseVision = (this.type === "herbivore" ? settings.herbivoreVision : settings.predatorVision) + this.level * 10;
+    const vision = baseVision ** 2;
     let fleeing = false;
 
     if (this.type === "herbivore") {
+      const herdRadiusSquared = settings.herdAwarenessRadius ** 2;
+      const nearbyHerdMembers = organisms.reduce((count, other) =>
+        count + (other !== this && !other.dead && other.type === "herbivore" &&
+          distanceSquared(this, other) <= herdRadiusSquared ? 1 : 0), 0);
+      const herdBonus = Math.min(settings.herdVigilanceMaxBonus, nearbyHerdMembers * settings.herdVigilancePerMember);
+      const threatVision = (baseVision * (1 + herdBonus)) ** 2;
       for (const other of organisms) {
         if (other.dead || other.type !== "predator") continue;
         const d = distanceSquared(this, other);
-        if (d < vision && d < nearest) { nearest = d; target = other; fleeing = true; }
+        if (d < threatVision && d < nearest) { nearest = d; target = other; fleeing = true; }
       }
       if (!target && this.level >= settings.herbivoreMatingLevel && this.reproductionCooldown <= 0 && this.energy > 45) {
         for (const other of organisms) {
@@ -132,14 +170,18 @@ class Organism {
       }
       if (!target && this.eatCooldown <= 0) {
         for (const other of organisms) {
-          if (other.dead || other.type !== "plant" || other.level >= settings.plantPerpetualLevel) continue;
+          if (other.dead || other.type !== "plant" || !canHerbivoreEatPlant(this, other)) continue;
           const d = distanceSquared(this, other);
           if (d < vision && d < nearest) { nearest = d; target = other; }
         }
       }
-    } else {
+    } else if (this.eatCooldown <= 0) {
+      const predatorPopulation = organisms.reduce((count, organism) =>
+        count + (!organism.dead && organism.type === "predator" ? 1 : 0), 0);
       for (const other of organisms) {
-        const huntable = other.type === "herbivore" && canPredatorEatHerbivore(this, other);
+        const huntable = (other.type === "herbivore" && canPredatorEatHerbivore(this, other)) ||
+          (predatorPopulation > 3 && other.type === "predator" && other.level >= 2 &&
+            this.level >= other.level + settings.cannibalLevelGap);
         if (other === this || other.dead || !huntable) continue;
         const d = distanceSquared(this, other);
         if (d < vision && d < nearest) { nearest = d; target = other; }
@@ -147,9 +189,14 @@ class Organism {
     }
 
     this.isChasing = this.type === "predator" && Boolean(target);
-    const energyRate = this.type === "herbivore" ? 1.7 : (this.isChasing ? 2.1 : .65);
+    const energyRate = this.type === "herbivore"
+      ? 1.7
+      : (this.isChasing ? settings.predatorChaseEnergyDrain : settings.predatorIdleEnergyDrain);
     this.energy -= dt * energyRate * (1 + this.level * .04);
-    if (this.energy <= 0 || this.age > 150) { this.dead = true; return; }
+    if (this.energy <= 0 || (settings.oldAgeEnabled && this.age > settings.animalLifespan)) {
+      this.dead = true;
+      return;
+    }
 
     if (this.type === "predator" && this.avoidanceTimer > 0) {
       this.heading = this.avoidanceHeading;
@@ -168,6 +215,19 @@ class Organism {
     this.y += Math.sin(this.heading) * this.moveSpeed * dt;
     if (this.x < 0 || this.x > canvas.width) { this.heading = Math.PI - this.heading; this.x = Math.max(0, Math.min(canvas.width, this.x)); }
     if (this.y < 0 || this.y > canvas.height) { this.heading = -this.heading; this.y = Math.max(0, Math.min(canvas.height, this.y)); }
+
+    if (this.type === "herbivore") {
+      const overlapsHerbivore = organisms.some((other) =>
+        other !== this && !other.dead && other.type === "herbivore" &&
+        distanceSquared(this, other) < ((this.size + other.size) / 2 + 1) ** 2
+      );
+      if (overlapsHerbivore) {
+        this.x = previousX;
+        this.y = previousY;
+        this.heading += random(-1, 1);
+        this.turnTimer = random(.2, .6);
+      }
+    }
 
     if (this.type === "predator" && settings.plantsBlockPredators) {
       const blockedByPlant = organisms.some((other) =>
@@ -193,24 +253,30 @@ class Organism {
     for (const other of organisms) {
       if (other === this || other.dead || distanceSquared(this, other) > radius ** 2) continue;
       const canEatPlant = this.type === "herbivore" && this.eatCooldown <= 0 &&
-        other.type === "plant" && other.level < settings.plantPerpetualLevel;
-      const canEatHerbivore = this.type === "predator" && other.type === "herbivore" && canPredatorEatHerbivore(this, other);
-      if (canEatPlant || canEatHerbivore) {
+        other.type === "plant" && canHerbivoreEatPlant(this, other);
+      const canEatHerbivore = this.type === "predator" && this.eatCooldown <= 0 &&
+        other.type === "herbivore" && canPredatorEatHerbivore(this, other);
+      const predatorPopulation = organisms.reduce((count, organism) =>
+        count + (!organism.dead && organism.type === "predator" ? 1 : 0), 0);
+      const canEatSmallerPredator = this.type === "predator" && this.eatCooldown <= 0 && other.type === "predator" &&
+        predatorPopulation > 3 && other.level >= 2 && this.level >= other.level + settings.cannibalLevelGap;
+      if (canEatPlant || canEatHerbivore || canEatSmallerPredator) {
         other.dead = true;
         if (this.type === "predator") {
           this.slowTimer = settings.predatorSlowDuration;
+          this.eatCooldown = settings.predatorEatCooldown;
           if (canEatHerbivore) this.herbivoreMeals += 1;
         } else if (canEatPlant) {
           this.eatCooldown = settings.herbivoreEatCooldown;
           this.slowTimer = settings.herbivoreSlowDuration;
         }
-        this.energy = Math.min(160, this.energy + (this.type === "predator" ? 48 : 27));
-        this.level = Math.min(8, this.level + (this.type === "predator" ? settings.predatorLevelGain : settings.herbivoreLevelGain));
+        this.energy = Math.min(160, this.energy + (this.type === "predator" ? settings.predatorMealEnergy : 27));
+        const maximumLevel = this.type === "predator" ? settings.predatorMaxLevel : settings.herbivoreMaxLevel;
+        this.level = Math.min(maximumLevel, this.level + (this.type === "predator" ? settings.predatorLevelGain : settings.herbivoreLevelGain));
         if (this.type === "predator" && this.herbivoreMeals >= settings.predatorMealsPerOffspring &&
-            this.reproductionCooldown <= 0 && organisms.length < settings.maxPopulation) {
-          organisms.push(new Organism("predator"));
+            organisms.length < settings.maxPopulation) {
+          organisms.push(new Organism("predator", this.x + random(-8, 8), this.y + random(-8, 8)));
           this.herbivoreMeals = 0;
-          this.reproductionCooldown = settings.predatorReproductionCooldown;
           this.energy *= .7;
         }
         return;
@@ -224,7 +290,8 @@ class Organism {
         const availableSlots = settings.maxPopulation - organisms.length;
         const offspringCount = Math.min(settings.herbivoreOffspringCount, availableSlots);
         for (let i = 0; i < offspringCount; i++) {
-          const offspring = new Organism("herbivore", centerX + random(-8, 8), centerY + random(-8, 8));
+          const offspring = createOpenOrganism("herbivore", centerX, centerY, 22);
+          if (!offspring) continue;
           offspring.reproductionCooldown = settings.herbivoreMateCooldown;
           organisms.push(offspring);
         }
@@ -259,8 +326,8 @@ function resizeCanvas() {
   const rect = canvas.getBoundingClientRect();
   const previousWidth = canvas.width || rect.width;
   const previousHeight = canvas.height || rect.height;
-  canvas.width = Math.max(1, Math.floor(rect.width));
-  canvas.height = Math.max(1, Math.floor(rect.height));
+  canvas.width = Math.max(1, Math.floor(rect.width * settings.mapScale));
+  canvas.height = Math.max(1, Math.floor(rect.height * settings.mapScale));
   organisms.forEach((o) => {
     o.x = o.x / previousWidth * canvas.width;
     o.y = o.y / previousHeight * canvas.height;
@@ -280,24 +347,94 @@ function getTotals() {
   return totals;
 }
 
+function getLevelTotals() {
+  const levels = { plant: {}, herbivore: {}, predator: {} };
+  organisms.forEach((organism) => {
+    if (organism.dead) return;
+    const level = Math.max(1, Math.floor(organism.level));
+    levels[organism.type][level] = (levels[organism.type][level] || 0) + 1;
+  });
+  return levels;
+}
+
+function levelColor(type, level, maxLevel) {
+  const hex = COLORS[type].slice(1);
+  const base = [0, 2, 4].map((offset) => parseInt(hex.slice(offset, offset + 2), 16));
+  const brightness = .08 + .62 * ((level - 1) / Math.max(1, maxLevel - 1));
+  const mixed = base.map((channel) => Math.round(channel + (255 - channel) * brightness));
+  return `rgb(${mixed[0]}, ${mixed[1]}, ${mixed[2]})`;
+}
+
+function positionIsOpen(type, x, y, size = 3) {
+  const candidateSize = type === "plant" ? 8 : size;
+  if (x < candidateSize || x > canvas.width - candidateSize || y < candidateSize || y > canvas.height - candidateSize) return false;
+  return !organisms.some((other) => {
+    if (other.dead || other.type !== type) return false;
+    const otherSize = type === "plant" ? 8 : other.size;
+    const minimumDistance = (candidateSize + otherSize) / 2 + 1;
+    return (x - other.x) ** 2 + (y - other.y) ** 2 < minimumDistance ** 2;
+  });
+}
+
+function createOpenOrganism(type, originX = null, originY = null, spread = 0) {
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const angle = random(0, Math.PI * 2);
+    const radius = spread ? random(5, spread) : 0;
+    const x = originX === null ? random(3, canvas.width - 3) : Math.max(3, Math.min(canvas.width - 3, originX + Math.cos(angle) * radius));
+    const y = originY === null ? random(3, canvas.height - 3) : Math.max(3, Math.min(canvas.height - 3, originY + Math.sin(angle) * radius));
+    if (positionIsOpen(type, x, y)) return new Organism(type, x, y);
+  }
+  return null;
+}
+
+function createEdgeOrganism(type) {
+  const margin = 5;
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const edge = Math.floor(random(0, 4));
+    const x = edge === 0 ? margin : edge === 1 ? canvas.width - margin : random(margin, canvas.width - margin);
+    const y = edge === 2 ? margin : edge === 3 ? canvas.height - margin : random(margin, canvas.height - margin);
+    if (positionIsOpen(type, x, y)) return new Organism(type, x, y);
+  }
+  return null;
+}
+
+function scheduleMigration(type) {
+  const average = type === "herbivore" ? settings.herbivoreMigrationInterval : settings.predatorMigrationInterval;
+  const predatorCount = organisms.filter((organism) => !organism.dead && organism.type === "predator").length;
+  const scarcityMultiplier = type === "predator" && predatorCount < 3 ? .3 : 1;
+  migrationTimers[type] = random(average * .6, average * 1.4) * scarcityMultiplier;
+}
+
+function migrate(type) {
+  const requested = type === "herbivore" ? settings.herbivoreMigrationCount : settings.predatorMigrationCount;
+  const amount = Math.min(requested, settings.maxPopulation - organisms.length);
+  for (let i = 0; i < amount; i++) {
+    const migrant = createEdgeOrganism(type);
+    if (migrant) organisms.push(migrant);
+  }
+  scheduleMigration(type);
+}
+
 function spawnPlant() {
   const plants = organisms.filter((organism) => !organism.dead && organism.type === "plant");
   if (plants.length && Math.random() < settings.plantClusterChance) {
-    const weightTotal = plants.reduce((sum, plant) => sum + plant.level ** 2, 0);
+    const weightTotal = plants.reduce((sum, plant) => sum + plant.level ** 3, 0);
     let choice = random(0, weightTotal);
     let parent = plants[0];
     for (const plant of plants) {
-      choice -= plant.level ** 2;
+      choice -= plant.level ** 3;
       if (choice <= 0) { parent = plant; break; }
     }
     const spread = Math.max(10, 46 - parent.level * 4);
-    const angle = random(0, Math.PI * 2);
-    const radius = random(5, spread);
-    organisms.push(new Organism("plant",
-      Math.max(0, Math.min(canvas.width, parent.x + Math.cos(angle) * radius)),
-      Math.max(0, Math.min(canvas.height, parent.y + Math.sin(angle) * radius))));
+    const maturity = (parent.level - 1) / Math.max(1, settings.plantPerpetualLevel - 1);
+    const seedlingCount = 1 + Math.round(maturity * (settings.plantMaxSeedlings - 1));
+    for (let i = 0; i < seedlingCount && organisms.length < settings.maxPopulation; i++) {
+      const plant = createOpenOrganism("plant", parent.x, parent.y, spread);
+      if (plant) organisms.push(plant);
+    }
   } else {
-    organisms.push(new Organism("plant"));
+    const plant = createOpenOrganism("plant");
+    if (plant) organisms.push(plant);
   }
 }
 
@@ -330,7 +467,12 @@ function drawChart() {
     const top = speciesIndex * (facetHeight + chartGap);
     const plotTop = top + 14 * ratio;
     const plotHeight = Math.max(1, facetHeight - 15 * ratio);
-    const highest = Math.max(1, ...populationHistory.map((point) => point[type]));
+    const activeLevels = [...new Set(populationHistory.flatMap((point) =>
+      Object.keys(point.levels?.[type] || {}).map(Number)
+    ))].sort((a, b) => a - b);
+    const highest = Math.max(1, ...populationHistory.flatMap((point) =>
+      activeLevels.map((level) => point.levels?.[type]?.[level] || 0)
+    ));
     const step = highest <= 10 ? 2 : highest <= 50 ? 10 : highest <= 200 ? 25 : highest <= 1000 ? 100 : 250;
     const ceiling = Math.max(step, Math.ceil(highest / step) * step);
 
@@ -339,6 +481,14 @@ function drawChart() {
     chartContext.fillRect(left, top + 3 * ratio, 5 * ratio, 5 * ratio);
     chartContext.fillStyle = muted;
     chartContext.fillText(label, left + 9 * ratio, top + 6 * ratio);
+
+    const legendStart = Math.max(left + 68 * ratio, width - right - activeLevels.length * 18 * ratio);
+    chartContext.font = `${7 * ratio}px ui-monospace, monospace`;
+    activeLevels.forEach((level, index) => {
+      chartContext.fillStyle = levelColor(type, level, Math.max(...activeLevels, 1));
+      chartContext.fillText(`L${level}`, legendStart + index * 18 * ratio, top + 6 * ratio);
+    });
+    chartContext.font = `${9 * ratio}px ui-monospace, monospace`;
 
     for (let i = 0; i <= 2; i++) {
       const y = plotTop + plotHeight * i / 2;
@@ -353,16 +503,19 @@ function drawChart() {
       chartContext.fillText(Math.round(ceiling * (1 - i / 2)), left - 5 * ratio, y);
     }
 
-    chartContext.strokeStyle = COLORS[type];
-    chartContext.lineWidth = 1.5 * ratio;
-    chartContext.lineJoin = "round";
-    chartContext.beginPath();
-    populationHistory.forEach((point, index) => {
-      const x = left + (point.time - firstTime) / duration * innerWidth;
-      const y = plotTop + (1 - point[type] / ceiling) * plotHeight;
-      if (index === 0) chartContext.moveTo(x, y); else chartContext.lineTo(x, y);
+    activeLevels.forEach((level) => {
+      chartContext.strokeStyle = levelColor(type, level, Math.max(...activeLevels, 1));
+      chartContext.lineWidth = (level === Math.max(...activeLevels) ? 1.8 : 1.2) * ratio;
+      chartContext.lineJoin = "round";
+      chartContext.beginPath();
+      populationHistory.forEach((point, index) => {
+        const x = left + (point.time - firstTime) / duration * innerWidth;
+        const population = point.levels?.[type]?.[level] || 0;
+        const y = plotTop + (1 - population / ceiling) * plotHeight;
+        if (index === 0) chartContext.moveTo(x, y); else chartContext.lineTo(x, y);
+      });
+      chartContext.stroke();
     });
-    chartContext.stroke();
   });
 
   chartContext.fillStyle = muted;
@@ -374,11 +527,12 @@ function drawChart() {
 
 function addPlantPatch(x, y, amount = 12) {
   for (let i = 0; i < amount && organisms.length < settings.maxPopulation; i++) {
-    organisms.push(new Organism("plant", Math.max(0, Math.min(canvas.width, x + random(-28, 28))), Math.max(0, Math.min(canvas.height, y + random(-28, 28)))));
+    const plant = createOpenOrganism("plant", x, y, 28);
+    if (plant) organisms.push(plant);
   }
 }
 
-function resetWorld() {
+function resetWorld(reason = "new_world") {
   organisms = [];
   worldAge = 0;
   plantSpawnTimer = 0;
@@ -390,11 +544,22 @@ function resetWorld() {
     predator: settings.startingPredators,
   };
   for (const [type, amount] of Object.entries(startingPopulation)) {
-    for (let i = 0; i < amount; i++) organisms.push(new Organism(type));
+    for (let i = 0; i < amount; i++) {
+      const organism = type === "predator" ? new Organism(type) : createOpenOrganism(type);
+      if (organism) organisms.push(organism);
+    }
   }
+  scheduleMigration("herbivore");
+  scheduleMigration("predator");
   updateStats();
-  populationHistory.push({ time: 0, ...getTotals() });
+  populationHistory.push({ time: 0, ...getTotals(), levels: getLevelTotals() });
   drawChart();
+  trackAnalytics("life_simulation_started", {
+    reason,
+    starting_plants: settings.startingPlants,
+    starting_herbivores: settings.startingHerbivores,
+    starting_predators: settings.startingPredators,
+  });
 }
 
 function updateStats() {
@@ -414,15 +579,24 @@ function frame(now) {
     worldAge += dt;
     plantSpawnTimer += dt;
     chartSampleTimer += dt;
+    migrationTimers.herbivore -= dt;
+    migrationTimers.predator -= dt;
+    const predatorCount = organisms.reduce((count, organism) =>
+      count + (!organism.dead && organism.type === "predator" ? 1 : 0), 0);
+    if (predatorCount < 3) {
+      migrationTimers.predator = Math.min(migrationTimers.predator, settings.predatorMigrationInterval * .3);
+    }
     while (plantSpawnTimer > settings.plantSpawnInterval && organisms.length < settings.maxPopulation) {
       plantSpawnTimer -= settings.plantSpawnInterval;
       spawnPlant();
     }
+    if (migrationTimers.herbivore <= 0) migrate("herbivore");
+    if (migrationTimers.predator <= 0) migrate("predator");
     organisms.slice().forEach((organism) => organism.update(dt));
     organisms = organisms.filter((organism) => !organism.dead);
     if (chartSampleTimer >= 1) {
       chartSampleTimer %= 1;
-      populationHistory.push({ time: worldAge, ...getTotals() });
+      populationHistory.push({ time: worldAge, ...getTotals(), levels: getLevelTotals() });
     }
   }
 
@@ -436,14 +610,24 @@ function frame(now) {
 pauseButton.addEventListener("click", () => {
   paused = !paused;
   pauseButton.textContent = paused ? "Resume" : "Pause";
+  trackAnalytics("life_simulation_pause_toggled", { paused, world_age_seconds: Math.round(worldAge) });
 });
 resetButton.addEventListener("click", resetWorld);
 speedInput.addEventListener("input", () => {
   speed = Number(speedInput.value);
   speedOutput.textContent = `${speed}×`;
 });
-document.querySelector("#settingsButton").addEventListener("click", () => settingsDialog.showModal());
-document.querySelector("#rulesButton").addEventListener("click", () => rulesDialog.showModal());
+speedInput.addEventListener("change", () => {
+  trackAnalytics("life_simulation_speed_changed", { speed });
+});
+document.querySelector("#settingsButton").addEventListener("click", () => {
+  settingsDialog.showModal();
+  trackAnalytics("life_panel_opened", { panel: "settings" });
+});
+document.querySelector("#rulesButton").addEventListener("click", () => {
+  rulesDialog.showModal();
+  trackAnalytics("life_panel_opened", { panel: "rules" });
+});
 document.querySelectorAll("[data-close]").forEach((button) => {
   button.addEventListener("click", () => document.querySelector(`#${button.dataset.close}`).close());
 });
@@ -458,15 +642,26 @@ document.querySelectorAll("[data-setting]").forEach((input) => {
     settings[key] = input.type === "checkbox"
       ? input.checked
       : Number(input.value) / (input.dataset.percent !== undefined ? 100 : 1);
+    if (key === "mapScale") resizeCanvas();
   });
+});
+document.querySelector("#saveDefaultsButton").addEventListener("click", (event) => {
+  localStorage.setItem("pixelLifeSettings", JSON.stringify(settings));
+  const button = event.currentTarget;
+  button.textContent = "Defaults saved";
+  setTimeout(() => { button.textContent = "Save as defaults"; }, 1600);
+  trackAnalytics("life_settings_saved", { settings_count: Object.keys(settings).length });
 });
 canvas.addEventListener("pointerdown", (event) => {
   const rect = canvas.getBoundingClientRect();
-  addPlantPatch(event.clientX - rect.left, event.clientY - rect.top);
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  addPlantPatch((event.clientX - rect.left) * scaleX, (event.clientY - rect.top) * scaleY);
+  trackAnalytics("life_plant_patch_added", { world_age_seconds: Math.round(worldAge) });
 });
 window.addEventListener("resize", () => { resizeCanvas(); resizeChart(); });
 
 resizeCanvas();
 resizeChart();
-resetWorld();
+resetWorld("initial_load");
 requestAnimationFrame(frame);

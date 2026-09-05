@@ -87,7 +87,8 @@ h1 { margin: 0; font-size: clamp(23px, 3vw, 36px); letter-spacing: -.05em; }
 .settings-group.species-green h3 { color: var(--green); }
 .settings-group.species-yellow h3 { color: var(--yellow); }
 .settings-group.species-blue h3 { color: var(--blue); }
-.modal-note { margin: 0; padding: 12px 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 9px; }
+.modal-footer { padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-top: 1px solid var(--line); }
+.modal-note { margin: 0; color: var(--muted); font-size: 9px; }
 .rules-modal { width: min(620px, calc(100vw - 28px)); }
 .rules-list { padding: 4px 20px 20px; overflow: auto; max-height: calc(100vh - 100px); }
 .rules-list section { padding: 16px 0; border-bottom: 1px solid var(--line); }
