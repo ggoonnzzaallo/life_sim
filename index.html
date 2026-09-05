@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="A tiny ecosystem simulation of plants, herbivores, and predators." />
+    <title>Pixel Life</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">A TINY ECOSYSTEM</p>
+          <h1>Pixel Life</h1>
+        </div>
+        <div class="controls">
+          <button id="rulesButton" class="button" type="button">Rules</button>
+          <button id="settingsButton" class="button" type="button">Settings</button>
+          <button id="pauseButton" class="button primary" type="button">Pause</button>
+          <button id="resetButton" class="button" type="button">New world</button>
+        </div>
+      </header>
+
+      <section class="dashboard" aria-label="Simulation statistics">
+        <div class="stat plant-stat">
+          <span class="swatch green"></span>
+          <div><span class="label">Plants</span><strong id="plantCount">0</strong></div>
+        </div>
+        <div class="stat herbivore-stat">
+          <span class="swatch yellow"></span>
+          <div><span class="label">Herbivores</span><strong id="herbivoreCount">0</strong></div>
+        </div>
+        <div class="stat predator-stat">
+          <span class="swatch blue"></span>
+          <div><span class="label">Predators</span><strong id="predatorCount">0</strong></div>
+        </div>
+        <div class="stat time-stat">
+          <span class="clock-icon">◷</span>
+          <div><span class="label">World age</span><strong id="worldAge">0:00</strong></div>
+        </div>
+      </section>
+
+      <div class="simulation-layout">
+        <section class="world-frame">
+          <canvas id="world" aria-label="Animated pixel life simulation"></canvas>
+          <div id="emptyState" class="empty-state" hidden>
+            <strong>The ecosystem went quiet.</strong>
+            <span>Plants will keep growing, or start a new world.</span>
+          </div>
+          <div class="world-hint">Click anywhere to grow a patch of plants</div>
+        </section>
+
+        <section class="chart-panel" aria-labelledby="chartTitle">
+          <div class="chart-header">
+            <div>
+              <span class="label">LIVE HISTORY</span>
+              <h2 id="chartTitle">Population by species</h2>
+            </div>
+          </div>
+          <canvas id="populationChart" aria-label="Line chart of species population through time"></canvas>
+        </section>
+      </div>
+
+      <footer>
+        <div class="legend">
+          <span><i class="green"></i>Plants survive + seed</span>
+          <span><i class="yellow"></i>Herbivores mate + eat plants</span>
+          <span><i class="blue"></i>Predators reproduce by eating</span>
+        </div>
+        <label class="speed-control">
+          <span>Speed</span>
+          <input id="speedInput" type="range" min="0.5" max="2" value="1" step="0.25" />
+          <output id="speedOutput">1×</output>
+        </label>
+      </footer>
+    </main>
+
+    <dialog id="settingsDialog" class="modal">
+      <div class="modal-header">
+        <div><span class="label">WORLD CONTROLS</span><h2>Settings</h2></div>
+        <button class="icon-button" data-close="settingsDialog" type="button" aria-label="Close settings">×</button>
+      </div>
+      <div class="settings-grid">
+        <section class="settings-group">
+          <h3>World</h3>
+          <label>Starting plants <input data-setting="startingPlants" type="number" min="0" max="3000" step="10" /></label>
+          <label>Starting herbivores <input data-setting="startingHerbivores" type="number" min="0" max="300" /></label>
+          <label>Starting predators <input data-setting="startingPredators" type="number" min="0" max="100" /></label>
+          <label>Population limit <input data-setting="maxPopulation" type="number" min="100" max="5000" step="50" /></label>
+          <label>Speed gain per level <input data-setting="speedGainPerLevel" type="number" min="0" max="50" step="1" data-percent /></label>
+          <label>Size gain per level <input data-setting="sizeGainPerLevel" type="number" min="0" max="4" step="0.1" /></label>
+        </section>
+        <section class="settings-group species-green">
+          <h3>Green · Plants</h3>
+          <label>Spawn every (sec) <input data-setting="plantSpawnInterval" type="number" min="0.05" max="5" step="0.05" /></label>
+          <label>Level every (sec) <input data-setting="plantLevelInterval" type="number" min="1" max="120" /></label>
+          <label>Perpetual level <input data-setting="plantPerpetualLevel" type="number" min="2" max="20" step="1" /></label>
+          <label>Nearby spawn chance <input data-setting="plantClusterChance" type="number" min="0" max="100" step="5" data-percent /></label>
+          <label>Size gain per level <input data-setting="plantSizeGainPerLevel" type="number" min="0" max="3" step="0.1" /></label>
+        </section>
+        <section class="settings-group species-yellow">
+          <h3>Yellow · Herbivores</h3>
+          <label>Base speed <input data-setting="herbivoreSpeed" type="number" min="5" max="80" /></label>
+          <label>Awareness range <input data-setting="herbivoreVision" type="number" min="20" max="500" step="10" /></label>
+          <label>Offspring per mating <input data-setting="herbivoreOffspringCount" type="number" min="1" max="20" step="1" /></label>
+          <label>Minimum mating level <input data-setting="herbivoreMatingLevel" type="number" min="1" max="8" step="0.25" /></label>
+          <label>Mating cooldown (sec) <input data-setting="herbivoreMateCooldown" type="number" min="1" max="60" /></label>
+          <label>Eating cooldown (sec) <input data-setting="herbivoreEatCooldown" type="number" min="0" max="30" step="0.5" /></label>
+          <label>Post-meal slowdown (sec) <input data-setting="herbivoreSlowDuration" type="number" min="0" max="30" step="0.5" /></label>
+          <label>Post-meal speed <input data-setting="herbivoreSlowFactor" type="number" min="10" max="100" step="5" data-percent /></label>
+          <label>Food level gain <input data-setting="herbivoreLevelGain" type="number" min="0.05" max="2" step="0.05" /></label>
+        </section>
+        <section class="settings-group species-blue">
+          <h3>Blue · Predators</h3>
+          <label>Base speed <input data-setting="predatorSpeed" type="number" min="5" max="80" /></label>
+          <label>Speed gain per level <input data-setting="predatorSpeedGainPerLevel" type="number" min="0" max="75" step="1" data-percent /></label>
+          <label>Hunting range <input data-setting="predatorVision" type="number" min="20" max="1000" step="10" /></label>
+          <label>Idle speed <input data-setting="predatorIdleSpeedFactor" type="number" min="5" max="100" step="5" data-percent /></label>
+          <label>Post-meal slowdown (sec) <input data-setting="predatorSlowDuration" type="number" min="0" max="30" step="0.5" /></label>
+          <label>Post-meal speed <input data-setting="predatorSlowFactor" type="number" min="10" max="100" step="5" data-percent /></label>
+          <label>Yellow meals per offspring <input data-setting="predatorMealsPerOffspring" type="number" min="1" max="20" step="1" /></label>
+          <label>Eating cooldown (sec) <input data-setting="predatorReproductionCooldown" type="number" min="1" max="60" /></label>
+          <label>Food level gain <input data-setting="predatorLevelGain" type="number" min="0.05" max="2" step="0.05" /></label>
+          <label>Allowed larger prey size <input data-setting="largerPreyAllowance" type="number" min="0" max="5" step="1" /></label>
+          <label class="toggle-row">Plants block predators <input data-setting="plantsBlockPredators" type="checkbox" /></label>
+        </section>
+      </div>
+      <p class="modal-note">Starting populations apply when you create a new world. Other changes apply immediately.</p>
+    </dialog>
+
+    <dialog id="rulesDialog" class="modal rules-modal">
+      <div class="modal-header">
+        <div><span class="label">ECOSYSTEM GUIDE</span><h2>Rules</h2></div>
+        <button class="icon-button" data-close="rulesDialog" type="button" aria-label="Close rules">×</button>
+      </div>
+      <div class="rules-list">
+        <section><h3>Movement</h3><p><strong class="plant-text">Green plants</strong> stay still. <strong class="herbivore-text">Yellow herbivores flee nearby predators first, then seek eligible mates, then plants.</strong> <strong class="predator-text">Blue predators scan over long distances for yellows</strong>, but wander slowly when no prey is visible and temporarily slow after eating. Plants remain solid barriers to predators.</p></section>
+        <section><h3>Feeding</h3><p><strong class="herbivore-text">Herbivores eat plants</strong> except for maximum-level perpetual plants. After eating, they slow down and must finish a digestion cooldown before eating again. <strong class="predator-text">Predators can eat herbivores of equal displayed size or one pixel larger.</strong> Predators never eat one another.</p></section>
+        <section><h3>Reproduction</h3><p><strong class="plant-text">Plants spawn naturally</strong>, especially near mature plants. <strong class="herbivore-text">Herbivores must reach level 2 before mating.</strong> Eligible pairs produce three offspring when they collide with enough energy. <strong class="predator-text">Predators produce one offspring after eating three herbivores.</strong> Their offspring spawn at a random location for safety.</p></section>
+        <section><h3>Leveling</h3><p><strong class="plant-text">Plants level up by surviving.</strong> Higher levels attract more nearby growth, and a plant that reaches the maximum level becomes perpetual and cannot be eaten. <strong class="herbivore-text">Herbivores</strong> and <strong class="predator-text">predators</strong> level up by eating; higher levels make them larger, faster, and better at seeing food.</p></section>
+        <section><h3>Survival</h3><p><strong class="herbivore-text">Herbivores</strong> and <strong class="predator-text">predators</strong> steadily lose energy and eventually die without food. All populations share the world population limit.</p></section>
+      </div>
+    </dialog>
+
+    <script src="simulation.js"></script>
+  </body>
+</html>
