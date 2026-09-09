@@ -2,5 +2,4 @@ I was in Yosemite with my girlfriend the other weekend making the argument that 
 
 That led me to set up a simple sim where you have to balance three species: blues (predators), yellows (herbivores), and greens (plants) each with their own set of rules and behaviors. 
 
-[Run the sim online](https://htmlpreview.github.io/?https://github.com/ggoonnzzaallo/life_sim/blob/main/index.html)
-
+[Run the sim online](https://gonzalobuilds.com/life_sim/)
