@@ -42,7 +42,7 @@ const settings = {
   herdAwarenessRadius: 80,
   herdVigilancePerMember: .15,
   herdVigilanceMaxBonus: 1.5,
-  predatorSpeed: 17,
+  predatorSpeed: 20,
   predatorMaxLevel: 3,
   predatorSpeedGainPerLevel: .18,
   predatorVision: 210,
